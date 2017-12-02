@@ -1,0 +1,50 @@
+// 2016 David A Roberts <https://davidar.io>
+
+#include "shadertoy.h"
+
+#define NUM_SAMPLES 64
+#define MAX_DEPTH 40.0
+#define ABSORPTION 10.0
+
+// Smooth HSV to RGB conversion <https://www.shadertoy.com/view/MsS3Wc>
+vec3 hsv2rgb_smooth(in vec3 c) {
+    vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0);
+    rgb = rgb*rgb*(3.0-2.0*rgb); // cubic smoothing
+    return c.z * mix(vec3(1.0), rgb, c.y);
+}
+
+float f(in vec3 p) {
+    return 0.5 * sin(p.x) * sin(p.y) * sin(p.z) + 0.25 * sin(iTime) + 0.5;
+}
+
+void mainImage(out vec4 r, in vec2 c) {
+    vec2 v = 2.0 * (c.xy / iResolution.xy) - 1.0;
+    v.x *= iResolution.x / iResolution.y;
+
+    vec2 mo = vec2(iTime/10., 3.*cos(iTime/4.));
+    if(iMouse.z > 0.) mo = 3.0 * iMouse.xy / iResolution.xy;
+
+    // camera by iq
+    vec3 p = 25.0*normalize(vec3(cos(2.75-3.0*mo.x), 0.7-1.0*(mo.y-1.0), sin(2.75-3.0*mo.x)));
+    vec3 ta = vec3(0.0, 1.0, 0.0);
+    vec3 ww = normalize(ta - p);
+    vec3 uu = normalize(cross(vec3(0,1,0), ww));
+    vec3 vv = normalize(cross(ww,uu));
+    vec3 dir = normalize(v.x*uu + v.y*vv + 1.5*ww);
+
+    vec4 col = vec4(0);
+    float T = 1.0;
+    for(int i = 0; i < NUM_SAMPLES; i++) {
+        float density = f(p);
+        density *= 1. - smoothstep(8.,12.,abs(p.x));
+        density *= 1. - smoothstep(8.,12.,abs(p.y));
+        density *= 1. - smoothstep(8.,12.,abs(p.z));
+        if(density > 0.) {
+            float u = ABSORPTION * density / float(NUM_SAMPLES);
+            col += u * T * vec4(hsv2rgb_smooth(vec3(density,1,1)),1);
+            T *= 1. - u;
+        }
+        p += dir * MAX_DEPTH / float(NUM_SAMPLES);
+    }
+    r = col;
+}
