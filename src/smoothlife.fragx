@@ -5,7 +5,10 @@
 // using floating point values instead of integers.
 // http://www.conwaylife.com/wiki/SmoothLife
 
-#include "shadertoy.h"
+#include "shadertoy.frag"
+#ifdef SYNTHCLIPSE_ONLY
+uniform sampler2D iChannel0; //! buffer[xbuf: smoothlife.fragx]
+#endif
 
 // based on <https://git.io/vz29Q>
 // ---------------------------------------------

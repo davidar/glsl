@@ -2,7 +2,7 @@
 
 // I loved playing with GrafEq as a kid, so here it is re-implemented in GLSL.
 
-#include "shadertoy.h"
+#include "shadertoy.frag"
 
 // Try changing the value of AA if you have trouble running the shader.
 #define AA 4.

@@ -1,6 +1,6 @@
 // 2016 David A Roberts <https://davidar.io>
 
-#include "shadertoy.h"
+#include "shadertoy.frag"
 
 #define NUM_SAMPLES 64
 #define MAX_DEPTH 40.0
