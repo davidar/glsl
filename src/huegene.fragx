@@ -1,0 +1,11 @@
+#include "shadertoy.frag"
+uniform sampler2D iChannel0; //! buffer[xbuf: huegene.frag]
+
+void mainImage(out vec4 c, in vec2 p) {
+    if(iFrame < 10 || iMouse.z > 0.) return;
+    c = texture(iChannel0, p/iResolution.xy);
+    c.w = c.w * 110. - 100.;
+    if(c.w > 0.) c.xyz *= c.w/10.;
+    if(c.w < 0.) c.xyz *= -c.w/100.;
+    c.w = 1.;
+}

@@ -1,0 +1,10 @@
+#include "qm.frag"
+
+#define PI 3.141592653589793
+#define hue2rgb(h) clamp(abs(mod(6.*(h)+vec3(0,4,2),6.)-3.)-1.,0.,1.)
+void main() {
+    vec2 v = psi(gl_FragCoord.xy);
+    gl_FragColor.rgb =
+            1.5 * length(v) * hue2rgb(atan(v.y,v.x)/(2.*PI)) +
+            0.25 * potential(gl_FragCoord.xy);
+}

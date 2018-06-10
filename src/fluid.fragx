@@ -1,0 +1,10 @@
+#include "shadertoy.frag"
+uniform sampler2D iChannel0; //! buffer[xbuf: fluid.frag]
+
+void mainImage(out vec4 o, in vec2 p) {
+    vec4 c = texture(iChannel0, p.xy / iResolution.xy);
+    o.rgb = .6 + .6 * cos(atan(c.y,c.x) + vec3(0,23,21)); // velocity
+	o.rgb *= c.w/5.; // ink
+	o.rgb += clamp(c.z - 1., 0., 1.)/10.; // local fluid density
+    o.a = 1.;
+}

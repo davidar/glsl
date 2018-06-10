@@ -1,0 +1,23 @@
+#include "shadertoy.frag"
+uniform sampler2D iChannel0; //! buffer[xbuf: basin.frag]
+uniform bool hillshade; //! checkbox[false]
+
+#define buf(p) texture(iChannel0,(p)/iResolution.xy)
+
+#define N  vec2( 0, 1)
+#define E  vec2( 1, 0)
+#define S  vec2( 0,-1)
+#define W  vec2(-1, 0)
+
+#define PI 3.14159265359
+
+void mainImage( out vec4 r, in vec2 p ) {
+    r = vec4(0,0,0,1);
+    vec4 c = buf(p);
+    if (hillshade) {
+        vec2 grad = vec2(buf(p+E).r - buf(p+W).r, buf(p+N).r - buf(p+S).r);
+        r.rgb = 0.5 * vec3(1. + pow(length(grad), 0.5) * cos(atan(grad.y, grad.x) + 0.25*PI));
+    } else if (p.x > 2. && c.b > 0. && c.g > 1.) {
+        r.rgb += 0.15 * log(c.g) * (.6 + .6 * cos(6.3 * c.b + vec3(0,23,21)));
+    }
+}
