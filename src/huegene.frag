@@ -46,7 +46,7 @@ void mainImage(out vec4 c, in vec2 p) {
             c.xyz = hash33(vec3(p,iFrame));
             c.w = 10.;
         }
-    	c.w = (MAX_HEALTH + c.w) / (MAX_HEALTH + 10.); // scale to [0,1]
+        c.w = (MAX_HEALTH + c.w) / (MAX_HEALTH + 10.); // scale to [0,1]
         return;
     }
     
@@ -55,7 +55,7 @@ void mainImage(out vec4 c, in vec2 p) {
         c = vec4(0);
         c.xyz = hash33(vec3(p,iFrame));
         c.w = -MAX_HEALTH/2.;
-    	c.w = (MAX_HEALTH + c.w) / (MAX_HEALTH + 10.); // scale to [0,1]
+        c.w = (MAX_HEALTH + c.w) / (MAX_HEALTH + 10.); // scale to [0,1]
         return;
     }
     
