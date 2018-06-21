@@ -4,7 +4,7 @@
 // http://paulbourke.net/fractals/dla/
 
 #include "shadertoy.frag"
-#ifdef SYNTHCLIPSE_ONLY
+#ifndef GLSLVIEWER
 uniform sampler2D iChannel0; //! buffer[xbuf: dla.fragx]
 #endif
 

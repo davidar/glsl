@@ -1,4 +1,10 @@
-#ifdef SYNTHCLIPSE_ONLY
+#ifdef GL_ES
+//[
+precision mediump float;
+//]
+#endif
+
+#ifndef GLSLVIEWER
 uniform vec3 iResolution;           // viewport resolution (in pixels)
 uniform float iTime;                // shader playback time (in seconds)
 uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
@@ -11,14 +17,16 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
 uniform float iSampleRate;          // sound sample rate (i.e., 44100)
 uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
 
-void mainImage(out vec4, in vec2);
+void mainImage(out vec4 fragColor, in vec2 fragCoord);
 
 void main() {
     vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
     mainImage(color, gl_FragCoord.xy);
     gl_FragColor = color;
 }
-#else
+#endif
+
+#ifdef GLSLVIEWER
 #define iTime iGlobalTime
 #define iFrame int(iGlobalTime/iTimeDelta)
 #define iChannel0 u_backbuffer
