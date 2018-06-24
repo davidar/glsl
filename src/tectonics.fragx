@@ -1,0 +1,32 @@
+#include "shadertoy.frag"
+uniform sampler2D iChannel0; //! buffer[xbuf: tectonics.frag]
+uniform bool debug; //! checkbox[false]
+
+#define buf(p) texture(iChannel0,(p)/iResolution.xy)
+
+#define N vec2( 0, 1)
+#define E vec2( 1, 0)
+#define S vec2( 0,-1)
+#define W vec2(-1, 0)
+
+#define PI 3.14159265359
+
+void mainImage(out vec4 r, in vec2 p) {
+    float y = buf(p).z / 50.;
+    if (debug) {
+        vec4 c = buf(p);
+        r.rgb = (c.xy == vec2(0)) ? vec3(1) : .6 + .6 * cos(atan(c.y,c.x) + vec3(0,23,21));
+        r.rgb *= 0.1 + 0.9 * y;
+    } else if (y < 0.15) { // ocean
+        r = mix(vec4(0.01, 0.02, 0.08, 1), vec4(0.11, 0.28, 0.51, 1), y/0.15);
+    } else { // land
+        vec2 grad = vec2(buf(p+E).z - buf(p+W).z, buf(p+N).z - buf(p+S).z);
+        r = vec4(0.08, 0.14, 0.03, 1);
+        r = mix(r, vec4(0.18, 0.26, 0.08, 1), smoothstep(0.15, 0.25, y));
+        r = mix(r, vec4(0.52, 0.39, 0.26, 1), smoothstep(0.25, 0.50, y));
+        r = mix(r, vec4(0.32, 0.3, 0.2, 1), smoothstep(0.50, 0.75, y));
+        r = mix(r, vec4(1,1,1,1), smoothstep(0.75, 1., y));
+        r.rgb *= 0.75 + 0.25 * cos(atan(grad.y, grad.x) + 0.25*PI)
+                             * clamp(0.2 * length(grad), 0., 1.);
+    }
+}
