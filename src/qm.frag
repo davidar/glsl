@@ -15,13 +15,12 @@ uniform sampler2D iChannel3; //! buffer[xbuf: qm.xbuf3.frag, wrap: GL_CLAMP_TO_E
 #define k2(p)  texture(iChannel2,(p)/iResolution.xy).xy
 #define k3(p)  texture(iChannel3,(p)/iResolution.xy).xy
 
-#define cis(theta) vec2(cos(theta),sin(theta))
-#define length2(p) dot(p,p)
 vec2 psi0(vec2 p) {
     vec2 o = vec2(iResolution.y/4.);
     p = (p - 0.5 * iResolution.xy) / iResolution.y;
     o = (o - 0.5 * iResolution.xy) / iResolution.y;
-    return exp(-70.*length2(p-o)) * cis(250.*(p.x+p.y));
+    float theta = 250. * (p.x + p.y);
+    return exp(-70. * dot(p-o,p-o)) * vec2(cos(theta),sin(theta));
 }
 
 float potential(vec2 p) {
