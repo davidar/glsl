@@ -17,6 +17,8 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
 uniform float iSampleRate;          // sound sample rate (i.e., 44100)
 uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
 
+//[
+#ifndef NO_MAIN
 void mainImage(out vec4 fragColor, in vec2 fragCoord);
 
 void main() {
@@ -24,6 +26,8 @@ void main() {
     mainImage(color, gl_FragCoord.xy);
     gl_FragColor = color;
 }
+#endif
+//]
 #endif
 
 #ifdef GLSLVIEWER

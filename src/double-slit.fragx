@@ -1,6 +1,6 @@
 #include "shadertoy.frag"
-uniform sampler2D iChannel0; //! buffer[xbuf: 0]
-uniform sampler2D iChannel1; //! buffer[xbuf: 1]
+uniform sampler2D iChannel0; //! buffer[xbuf: double-slit.xbuf0.frag]
+uniform sampler2D iChannel1; //! buffer[xbuf: double-slit.xbuf1.frag]
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     fragColor.x = 5.*texture(iChannel0, fragCoord.xy/iResolution.xy).x;

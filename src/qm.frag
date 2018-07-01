@@ -3,12 +3,12 @@
 // Visualisation of the quantum wavefunction of a single particle, via numerical
 // solution of the Schrodinger equation
 
-uniform int iFrame;
-uniform vec3 iResolution;
-uniform sampler2D iChannel0; //! buffer[xbuf: 0, wrap: GL_CLAMP_TO_EDGE, mipmap: false]
-uniform sampler2D iChannel1; //! buffer[xbuf: 1, wrap: GL_CLAMP_TO_EDGE, mipmap: false]
-uniform sampler2D iChannel2; //! buffer[xbuf: 2, wrap: GL_CLAMP_TO_EDGE, mipmap: false]
-uniform sampler2D iChannel3; //! buffer[xbuf: 3, wrap: GL_CLAMP_TO_EDGE, mipmap: false]
+#define NO_MAIN
+#include "shadertoy.frag"
+uniform sampler2D iChannel0; //! buffer[xbuf: qm.xbuf0.frag, wrap: GL_CLAMP_TO_EDGE]
+uniform sampler2D iChannel1; //! buffer[xbuf: qm.xbuf1.frag, wrap: GL_CLAMP_TO_EDGE]
+uniform sampler2D iChannel2; //! buffer[xbuf: qm.xbuf2.frag, wrap: GL_CLAMP_TO_EDGE]
+uniform sampler2D iChannel3; //! buffer[xbuf: qm.xbuf3.frag, wrap: GL_CLAMP_TO_EDGE]
 
 #define psi(p) texture(iChannel0,(p)/iResolution.xy).xy
 #define k1(p)  texture(iChannel1,(p)/iResolution.xy).xy
