@@ -5,6 +5,11 @@ precision mediump float;
 #endif
 
 #ifndef GLSLVIEWER
+#ifndef SYNTHCLIPSE_ONLY
+layout(location = 0) out vec4 glFragColor;
+#define gl_FragColor glFragColor
+#endif
+
 uniform vec3 iResolution;           // viewport resolution (in pixels)
 uniform float iTime;                // shader playback time (in seconds)
 uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
