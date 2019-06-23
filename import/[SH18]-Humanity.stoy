@@ -1,0 +1,586 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>[SH18] Humanity</name>
+ * 
+ * <description>
+ *   A short story about humanity, from a global perspective. Followed by a minigame
+ *   in the spirit of SimEarth (see below to enable). Restart to sync music. Read
+ *   the comment at the top of the code for commentary and instructions.
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/XttcWn</url>
+ * 
+ * <date>2018-08-04</date>
+ * 
+ * <tags></tags>
+ * 
+ * <other-passes>
+ *   <pass-type>buffer0</pass-type>
+ *   <pass-type>buffer1</pass-type>
+ *   <pass-type>buffer2</pass-type>
+ *   <pass-type>buffer3</pass-type>
+ * </other-passes>
+ *
+ * <pass-name>Image</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Default" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel0; //! buffer[xbuf: 0, wrap: GL_CLAMP_TO_EDGE, mipmap: true]
+uniform sampler2D iChannel1; //! buffer[xbuf: 1, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+uniform sampler2D iChannel2; //! buffer[xbuf: 2, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+uniform sampler2D iChannel3; //! buffer[xbuf: 3, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+
+#include "[SH18]-Humanity.frag"
+
+#define DISABLE_MINIGAME // PLEASE TRY REMOVING THIS LINE
+#define DISABLE_SCATTERING // PLEASE TRY REMOVING THIS LINE
+/* 2018 David A Roberts <https://davidar.io>
+
+
+                                H U M A N I T Y
+
+This story begins four and a half billion years ago, with a lump of molten rock.
+Water contained within was vaporised by the heat, which escaped and began
+circulating through the early atmosphere forming around the planet. As time
+progressed and the rock cooled, the water vapour began to condense into oceans.
+The flow of liquid water across the surface carved valleys in the terrain,
+leaving an accumulation of sediment in its wake.
+
+A number of processes are gradually revealed through several visualisations:
+
+1. Tectonic plates, whose movements rearrange continents, uplift mountain
+   ranges, and rift into deep ocean trenches.
+
+2. River basins that have been etched in the land by hydraulic erosion.
+
+3. Global mean temperatures, ranging from below-freezing (blue) at the poles to
+   above-freezing (orange) at the equator. The distribution of heat shifts as
+   the simulation cycles between summer and winter.
+
+4. Global wind circulation patterns, driven by high-pressure (blue) and
+   low-pressure (orange) systems. These also change with the seasons, as well as
+   the evolving terrain.
+
+5. The distribution of terrestrial lifeforms, divided into plants (green), prey
+   (orange) and predators (red). The changing seasons trigger migrations into
+   regions that have warmed enough to support greater rates of plant growth.
+
+Concluding the prelude on the early earth, the pace slows to a cycle between day
+and night, terrain becoming fixed as tectonic movements become imperceptible.
+Soon the night reveals unprecedented patterns of light, as humanity proceeds to
+colonise the surface of the planet.
+
+This rapid expansion brings its own set of changes, as humans begin to burn
+large amounts of fossil fuels to power their settlements. Carbon that had lain
+dormant for millions of years is released into the atmosphere, and dispersed
+around the planet.
+
+Over several hundred years, humans burn through all available fossil fuel
+resources, releasing five trillion tonnes of carbon into the atmosphere. This
+strengthens the greenhouse effect, raising the global average temperature by
+almost 10 degrees Celsius. Large regions of land around the equator are rendered
+uninhabitable by extreme temperatures, resulting in the disappearance of
+humanity from a significant portion of the planet.
+
+                                      ***
+
+The minigame begins after humanity has left the planet, either through
+extinction or, for the lucky few, seeking a new home amongst the stars. Time
+speeds up again, and the planet gradually recovers as the excess carbon is
+reabsorbed. Use the mouse to draw terrain on the map, and observe how it
+influences the earth system. Hold any of the following keys on the keyboard:
+
+- D: lower terrain with the mouse, instead of raising it
+- U: alter tectonic uplift rather than directly raising/lowering terrain
+- T: tectonic plates visualisation
+- R: river basin visualisation
+- C: temperature visualisation
+- F: wind flow and air pressure visualisation
+- L: terrestrial life visualisation
+- S: spherical globe view
+
+The original SimEarth game can be played here:
+
+  https://archive.org/details/msdos_SimEarth_-_The_Living_Planet_1990
+
+
+
+
+
+
+
+
+
+
+
+
+
+*/
+
+#define buf(p) textureLod(iChannel0,(p)/iResolution.xy,0.)
+#define keypress(k) (texelFetch(iChannel1, ivec2(k,0), 0).w > 0.)
+
+#define CAMERA_DIST 25.
+
+#define DEEP_WATER vec4(0.01, 0.02, 0.08, 1)
+#define SHALLOW_WATER vec4(0.11, 0.28, 0.51, 1)
+#define WARM vec4(1.,0.5,0.,1)
+#define COOL vec4(0.,0.5,1.,1)
+
+vec3 fromlatlon(float lat, float lon) {
+    return vec3(sin(lon*PI/180.) * cos(lat*PI/180.), sin(lat*PI/180.), cos(lon*PI/180.) * cos(lat*PI/180.));
+}
+
+vec3 sun_pos(float t) {
+    float month = mod(t/2., 12.);
+    float delta = 1. - 2. * smoothstep(1.5, 4.5, month) + 2. * smoothstep(7.5, 10.5, month);
+    return fromlatlon(23.5 * delta, -360. * t/15.);
+}
+
+vec4 climate(vec2 fragCoord, vec2 pass) {
+    vec2 p = fragCoord * MAP_RES / iResolution.xy;
+    if (p.x < 0.5) p.x = 0.5;
+    vec2 uv = p / iResolution.xy;
+    return texture(iChannel1, uv + pass);
+}
+
+vec4 map_land(vec2 fragCoord, bool ocean) {
+    vec2 p = fragCoord;
+    vec2 grad = vec2(buf(p+E).z - buf(p+W).z, buf(p+N).z - buf(p+S).z);
+    float light = cos(atan(grad.y, grad.x) + 0.25*PI) * clamp(0.2 * length(grad), 0., 1.);
+    vec4 fragColor = vec4(vec3(0.015 + 0.085 * light), 1);
+    if (!ocean) fragColor.rgb *= 3.;
+    float y = buf(fragCoord).z;
+    if (y < OCEAN_DEPTH) {
+        if (ocean)
+            fragColor = mix(DEEP_WATER, SHALLOW_WATER, y / OCEAN_DEPTH);
+        else
+            fragColor.rgb = vec3(0);
+    }
+    fragColor.w = MAP_HEIGHT(y);
+    return fragColor;
+}
+
+vec4 map_flow(vec2 fragCoord) {
+    float mbar = climate(fragCoord, PASS3).x;
+    vec4 r = WARM;
+    r = mix(r, vec4(1), smoothstep(1000., 1012., floor(mbar)));
+    r = mix(r, COOL, smoothstep(1012., 1024., floor(mbar)));
+    
+    vec2 p = fragCoord * MAP_RES / iResolution.xy;
+    if (p.x < 1.) p.x = 1.;
+    vec2 uv = p / iResolution.xy;
+    vec2 v = texture(iChannel1, uv + PASS4).xy;
+    
+    vec4 c = texture(iChannel2, fragCoord/iResolution.xy);
+    float flow = (c.x > 0.) ? 1. : c.y;
+    flow *= clamp(length(v), 0., 1.);
+    
+    vec4 fragColor = map_land(fragCoord, false);
+    fragColor = mix(fragColor, r, 0.5 * flow);
+    return fragColor;
+}
+
+vec4 map_temp(vec2 fragCoord) {
+    float height = MAP_HEIGHT(buf(fragCoord).z);
+    float temp0 = climate(fragCoord, PASS3).z;
+    float temp = temp0 - mix(4., 3., smoothstep(WARMING_START_TIME, WARMING_END_TIME, iTime)) * height;
+    temp = floor(temp/2.)*2.;
+    vec4 r = COOL;
+    r = mix(r, vec4(1), smoothstep(-20.,  0., temp));
+    r = mix(r, WARM,    smoothstep(  0., 25., temp));
+    vec4 fragColor = map_land(fragCoord, false);
+    fragColor = mix(fragColor, r, 0.35);
+    return fragColor;
+}
+
+vec4 map_life(vec2 fragCoord) {
+    vec4 c = texture(iChannel3, fragCoord/iResolution.xy);
+    float vege = c.x;
+    float prey = c.y * 2.;
+    float pred = max(c.z, 0.);
+
+    vec4 fragColor = map_land(fragCoord, true);
+    fragColor = mix(fragColor, vec4(0.0, 1.0, 0.1, 1), 0.75 * smoothstep(0., 5., vege - prey - pred));
+    fragColor = mix(fragColor, vec4(0.8, 0.5, 0.0, 1), 0.75 * smoothstep(0., 5., prey - pred));
+    fragColor = mix(fragColor, vec4(0.5, 0.0, 0.0, 1), 0.75 * smoothstep(0., 5., pred));
+    return fragColor;
+}
+
+vec4 map_plates(vec2 fragCoord) {
+    vec2 p = fragCoord;
+    float q = buf(p).x;
+    float uplift = buf(p).y;
+    vec4 r = vec4(0,0,0,1);
+    r.rgb = (q < 0.) ? vec3(1) : .6 + .6 * cos(2.*PI*q + vec3(0,23,21));
+    vec4 fragColor = map_land(fragCoord, false);
+    fragColor = r * (5. * fragColor + 3. * clamp(2. * uplift - 1., 0., 1.) + 0.05);
+    return fragColor;
+}
+
+vec4 map_rivers(vec2 fragCoord) {
+    vec4 fragColor = map_land(fragCoord, true);
+    float flow = buf(fragCoord).w;
+    fragColor.rgb = mix(fragColor.rgb, .6 + .6 * cos(2.*PI * fract(flow) + vec3(0,23,21)),
+                        clamp(0.15 * log(floor(flow)), 0., 1.));
+    return fragColor;
+}
+
+vec4 map_sat(vec2 fragCoord) {
+    vec2 p = fragCoord;
+    vec2 uv = p / iResolution.xy;
+    float y = buf(p).z;
+    float lat = 180. * uv.y - 90.;
+    float lon = 360. * uv.x - 180.;
+    float height = MAP_HEIGHT(y);
+    vec2 grad = vec2(buf(p+E).z - buf(p+W).z, buf(p+N).z - buf(p+S).z);
+    float light = cos(atan(grad.y, grad.x) + 0.25*PI);
+    float illum = 0.75 + 0.25 * light * clamp(log(1. + length(grad)), 0., 1.);
+    float clouds = 1.;
+    
+    vec4 ocean = mix(vec4(0.01, 0.02, 0.08, 1), vec4(0.11, 0.28, 0.51, 1), y / OCEAN_DEPTH);
+    
+    if ((SLOWING_START_TIME < iTime && iTime < STORY_END_TIME) || keypress(KeyS)) {
+        vec3 q = fromlatlon(lat, lon);
+        vec2 ngrad = normalize(grad);
+        vec3 orient = normalize(fromlatlon(lat - ngrad.y, lon - ngrad.x) - q);
+        vec3 normal = normalize(mix(q, orient, 0.25 * clamp(log(1. + length(grad)), 0., 1.)));
+        vec3 sun = sun_pos(iTime);
+        float m = smoothstep(-1., 0., iTime - DAYNIGHT_START_TIME);
+        illum = clamp(mix(illum, dot(normal, sun), m), 0., 1.);
+        clouds *= mix(1., dot(q, sun), m);
+        ocean *= mix(1., dot(q, sun), m);
+    }
+    
+    float temp0 = climate(p, PASS3).z;
+    float temp = temp0 - mix(4., 3., smoothstep(WARMING_START_TIME, WARMING_END_TIME, iTime)) * height;
+    
+    // dry land
+    vec3 dry = vec3(0.89, 0.9, 0.89);
+    dry = mix(dry, vec3(0.11, 0.10, 0.05), smoothstep(-10., 0., temp));
+    dry = mix(dry, vec3(1.00, 0.96, 0.71), smoothstep( 0., 20., temp));
+    dry = mix(dry, vec3(0.81, 0.48, 0.31), smoothstep(20., 30., temp));
+
+    // vegetation
+    vec3 veg = vec3(0.89, 0.9, 0.89);
+    veg = mix(veg, vec3(0.56, 0.49, 0.28), smoothstep(-10., 0., temp));
+    veg = mix(veg, vec3(0.18, 0.34, 0.04), smoothstep( 0., 20., temp));
+    veg = mix(veg, vec3(0.05, 0.23, 0.04), smoothstep(20., 30., temp));
+
+    float moisture = texture(iChannel3, uv).w;
+    vec4 land = vec4(0,0,0,1);
+    land.rgb = mix(dry, veg, plant_growth(moisture, temp));
+    //land.rgb = mix(dry, veg, moisture/5.);
+    land.rgb *= illum;
+    if (iTime < LAND_END_TIME) {
+        float c = (15. - y) / 3.5;
+        float heat = clamp(2. / pow(iTime + 1., 2.), 0., 1.);
+        vec4 rock = mix(vec4(0.58, 0.57, 0.55, 1), vec4(0.15, 0.13, 0.1, 1), smoothstep(0., 3., c));
+        rock *= light * clamp(0.2 * length(grad), 0., 1.);
+        rock += 5. * c * heat * vec4(1., 0.15, 0.05, 1.);
+        land = mix(rock, land, smoothstep(LAND_START_TIME, LAND_END_TIME, iTime));
+    }
+    vec4 r = vec4(0,0,0,1);
+    if (y < OCEAN_DEPTH && iTime > OCEAN_START_TIME) {
+        r = mix(land, ocean, smoothstep(0., 2., iTime - OCEAN_START_TIME));
+    } else {
+        r = land;
+    }
+    
+    float vapour = texture(iChannel2, uv).w;
+    r.rgb = mix(r.rgb, vec3(1), 0.3 * clouds * log(1. + vapour) * smoothstep(0., LAND_END_TIME, iTime));
+    return r;
+}
+
+vec4 map_co2(vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+    float ppmv = 377. + 3. * texture(iChannel2, uv).z;
+    vec4 fragColor = vec4(0);
+    fragColor = mix(fragColor, vec4(0.10, 0.11, 0.22, 1), smoothstep(377., 379., ppmv));
+    fragColor = mix(fragColor, vec4(0.10, 0.40, 0.36, 1), smoothstep(379., 381., ppmv));
+    fragColor = mix(fragColor, vec4(0.58, 0.48, 0.08, 1), smoothstep(381., 383., ppmv));
+    fragColor = mix(fragColor, vec4(0.43, 0.14, 0.09, 1), smoothstep(383., 385., ppmv));
+    fragColor = mix(fragColor, vec4(0.25, 0.09, 0.21, 1), smoothstep(385., 387., ppmv));
+    return fragColor;
+}
+
+vec4 map(vec2 uv) {
+    vec2 p = uv * iResolution.xy;
+#ifndef DISABLE_MINIGAME
+    if (iTime > STORY_END_TIME) {
+        if (keypress(KeyC)) return map_temp(p);
+        if (keypress(KeyF)) return map_flow(p);
+        if (keypress(KeyL)) return map_life(p);
+        if (keypress(KeyR)) return map_rivers(p);
+        if (keypress(KeyT)) return map_plates(p);
+    }
+#endif
+    vec4 fragColor = map_sat(p);
+    if (iTime < SLOWING_START_TIME - 10.) {
+        float s = LAND_END_TIME + 5.;
+        float t = iTime + uv.x;
+        fragColor = mix(fragColor, map_plates(p), smoothstep(s - 1., s + 1., t)); s += 8.;
+        fragColor = mix(fragColor, map_rivers(p), smoothstep(s - 1., s + 1., t)); s += 8.;
+        fragColor = mix(fragColor, map_temp(p),   smoothstep(s - 1., s + 1., t)); s += 16.;
+        fragColor = mix(fragColor, map_flow(p),   smoothstep(s - 1., s + 1., t)); s += 16.;
+        fragColor = mix(fragColor, map_life(p),   smoothstep(s - 1., s + 1., t)); s += 18.;
+        fragColor = mix(fragColor, map_sat(p),    smoothstep(s - 1., s + 1., t));
+    }
+    return fragColor;
+}
+
+#define rexp(p) (-log(1e-4 + (1. - 2e-4) * hash12(p)))
+
+float edge(vec2 a, vec2 b, vec2 p, float width) {
+    // http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+    vec2 pa = p - a, ba = b - a;
+	float h = clamp(dot(pa,ba) / dot(ba,ba), 0., 1.);	
+    float d = length(pa - ba * h);
+    float x = distance(p,a) / (distance(p,a) + distance(p,b));
+    return 1.5 * mix(rexp(a), rexp(b), x) * smoothstep(width/2., 0., d) * smoothstep(1.75, 0.5, distance(a,b));
+}
+
+float network(vec2 p, float width) {
+    // based on https://www.shadertoy.com/view/lscczl
+    vec2 c = floor(p) + hash22(floor(p));
+    vec2 n = floor(p) + N + hash22(floor(p) + N);
+    vec2 e = floor(p) + E + hash22(floor(p) + E);
+    vec2 s = floor(p) + S + hash22(floor(p) + S);
+    vec2 w = floor(p) + W + hash22(floor(p) + W);
+    
+    float m = 0.;
+    m += edge(n, e, p, width);
+	m += edge(e, s, p, width);
+    m += edge(s, w, p, width);
+    m += edge(w, n, p, width);
+   
+    for (float y = -1.; y <= 1.; y++) {
+        for (float x = -1.; x <= 1.; x++) {
+            vec2 q = floor(p) + vec2(x,y) + hash22(floor(p) + vec2(x,y));
+            float intensity = distance(p,q) / clamp(rexp(floor(p) + vec2(x,y)), 0., 1.);
+            m += edge(c, q, p, width);
+            m += 10. * exp(-40. * intensity);
+        }
+    }
+    
+    return m;
+}
+
+float speckle(vec2 p, float density) {
+    float m = 0.;
+    for (float y = -1.; y <= 1.; y++) {
+        for (float x = -1.; x <= 1.; x++) {
+            vec2 q = floor(p) + vec2(x,y) + hash22(floor(p) + vec2(x,y));
+            float a = 1.5 * rexp(q) * pow(1.5 * clamp(density, 0., 0.67), 1.5);
+            m += a * exp(-2.0 * distance(p,q) / clamp(density, 0.67, 1.));
+        }
+    }
+    return m;
+}
+
+vec4 map_night(vec2 uv) {
+    vec2 fragCoord = uv * iResolution.xy;
+    float lat = 180. * uv.y - 90.;
+    float lon = 360. * uv.x - 180.;
+    vec3 p = fromlatlon(lat, lon);
+    
+    vec2 uv2 = fragCoord / iResolution.y + 1.;
+    vec2 wiggle = vec2(FBM(vec3(50. * uv2, 1)), FBM(vec3(50. * uv2, 2))) - 0.5;
+    
+    float height = MAP_HEIGHT(buf(fragCoord).z);
+    float density = 0.75;
+    if (height >= 0.) {
+        float width = 3e-3;
+        density += 0.5 * network(100. * uv2 + 1.0 * wiggle, 100. * width);
+        density += 1.0 * network( 30. * uv2 + 0.3 * wiggle,  30. * width);
+        density += 2.0 * network( 10. * uv2 + 0.1 * wiggle,  10. * width);
+        density += smoothstep(0.1, 0., height); // coast
+        density *= 0.1 + clamp(2. * FBM(12. * p) - 0.5, 0., 1.);
+        density *= 0.2 + 1.3 * clamp(2. * FBM(1.5 * p) - 0.67, 0., 1.);
+    }
+    float cities = speckle(1000. * uv, density);
+    cities *= 0.5 * FBM(vec3(50. * uv, iTime));
+    
+    float human = max(-texture(iChannel3, uv).z, 0.);
+    float temp = climate(fragCoord, PASS3).y;
+    vec3 night = vec3(0.00, 0.00, 0.01);
+    if (height > 0.) {
+        night = vec3(0.00, 0.00, 0.02);
+        night *= 1. + 1.5 * clamp(FBM(50. * p) - 0.15, 0., 1.);
+    }
+    if (human > 0.) {
+        float pop = FBM(vec3(fragCoord,0)) + 0.1;
+        pop += clamp(FBM(vec3(fragCoord/7.,0)) - 0.5, 0., 0.25);
+        pop = clamp(2. * pop - 1., 0., 1.);
+        float lit = pow(pop, 4.) * (0.67 + 0.33 * sin(2.*PI * (hash12(fragCoord) + iTime)));
+        vec3 lights = vec3(0.95, 0.76, 0.47);
+        lights = mix(lights, vec3(0.91, 0.14, 0.16), smoothstep(30., 35., temp));
+        night = mix(night, 0.75 * sqrt(density) * lights, smoothstep(0., 1., cities * human));
+        night = clamp(night, 0., 1.);
+    }
+    return vec4(night, 1);
+}
+
+vec4 background(vec2 fragCoord) {
+    vec2 p = (2. * fragCoord.xy - iResolution.xy) / iResolution.x;
+    return vec4(vec3(0.01) * (1. - length(p)/2.), 1.);
+}
+
+vec2 project(vec2 fragCoord, float scale, float zoom) {
+    vec2 p = (2. * fragCoord.xy - iResolution.xy) / iResolution.x;
+    p /= scale;
+    vec3 dir = normalize(vec3(PI * p, -zoom * (CAMERA_DIST - 1.)));
+    float b = CAMERA_DIST * dir.z;
+    float h = b*b - CAMERA_DIST*CAMERA_DIST + 1.;
+    if (h >= 0.) {
+        vec3 q = vec3(0., 0., CAMERA_DIST) - dir * (b + sqrt(h));
+        p = zoom * vec2(atan(q.x, q.z) / PI, 0.5 - acos(q.y / length(q)) / PI);
+    } else {
+        return vec2(0,99);
+    }
+    return p;
+}
+
+vec4 unwrap(vec2 fragCoord) {
+    vec4 col = background(fragCoord);
+    float scale = mix(0.2, 1., smoothstep(-1., 1., iTime / LAND_START_TIME));
+    float zoom = pow(2. * clamp((iTime - OCEAN_START_TIME)/5., 0., 1.), 5.) + 1.;
+    vec2 p = project(fragCoord, scale, zoom);
+    if (p.y < 1.) {
+        p.x += 5. * (1. - smoothstep(-1., 1., iTime / LAND_START_TIME));
+        if (iTime < OCEAN_START_TIME) p.x = mod(p.x + 1., 2.) - 1.;
+        p.y = mix(p.y, fragCoord.y/iResolution.y - 0.5, smoothstep(0., 5., iTime - OCEAN_START_TIME));
+        vec2 uv = vec2(0.5 * p.x + 0.5, p.y + 0.5);
+        if (abs(p.y) <= 0.5 && abs(p.x) <= 1.) col = map(uv);
+    }
+    return col;
+}
+
+vec4 rewrap(vec2 fragCoord) {
+    vec4 col = background(fragCoord);
+    float t = clamp((iTime - (SLOWING_START_TIME - 10.))/10., 0., 1.);
+    float scale = 1.;
+    float zoom = pow(2. - 2. * t, 5.) + 1.;
+    vec2 p = project(fragCoord, scale, zoom);
+    if (p.y < 1.) {
+        p.y = mix(fragCoord.y/iResolution.y - 0.5, p.y, smoothstep(-10., 0., iTime - SLOWING_START_TIME));
+        vec2 uv = vec2(0.5 * p.x + 0.5, p.y + 0.5);
+        if (abs(p.y) <= 0.5 && abs(p.x) <= 1.) col = map(uv);
+    }
+    return col;
+}
+
+vec4 marble(vec2 fragCoord) {
+    vec2 p = (2. * fragCoord.xy - iResolution.xy) / iResolution.x;
+    float lat = 0.;//15. * sin(0.1 * iTime);
+    float lon = -5. * max(iTime - TECTONICS_END_TIME, 0.);
+    if (iMouse.z > 0.) {
+        lat = 90.  - 180. * iMouse.y/iResolution.y;
+        lon = 180. - 360. * iMouse.x/iResolution.x;
+    }
+    vec3 camPos = CAMERA_DIST * fromlatlon(lat, lon);
+    vec3 w = normalize(-camPos);
+    vec3 u = normalize(cross(w, vec3(0,1,0)));
+    vec3 v = normalize(cross(u, w));
+    mat3 camera = mat3(u, v, w);
+    
+    float scale = mix(1. / PI, 0.9 * iResolution.y / iResolution.x,
+                      smoothstep(SLOWING_START_TIME, TECTONICS_END_TIME, iTime));
+    
+    vec3 sun = sun_pos(iTime);
+    vec3 dir = normalize(camera * vec3(p / scale, length(camPos) - 1.));
+    
+    vec4 fragColor = background(fragCoord);
+    
+	vec2 f = ray_vs_sphere(camPos, dir, 1.);
+    float dist = f.x;
+#ifdef DISABLE_SCATTERING
+    vec3 atmosphere = vec3(0);
+#else
+	vec2 e = ray_vs_sphere(camPos, dir, R_INNER + ATMOSPHERE_THICKNESS);
+	if (e.x > e.y) return fragColor;
+	e.y = min(e.y, f.x);
+    vec3 atmosphere = in_scatter(camPos, dir, e, sun);
+#endif
+    vec3 col = fragColor.rgb;
+    vec3 day = fragColor.rgb;
+    
+    float overlay_vis = smoothstep(0., 5., iTime - CO2_START_TIME + lat/90.);
+    overlay_vis *= smoothstep(0., -5., iTime - OVERLAY_END_TIME);
+    if (iTime < STORY_END_TIME) atmosphere *= 1. - overlay_vis;
+    
+    if (f.x < f.y) {
+        vec3 q = camPos + dir * dist;
+        float lat = 90. - acos(q.y / length(q)) * 180./PI;
+        float lon = atan(q.x, q.z) * 180./PI;
+        vec2 uv = vec2(lon/360., lat/180.) + 0.5;
+        day = map(uv).rgb;
+        vec3 night = map_night(uv).rgb;
+        float light = dot(q, sun);
+        col = mix(night, day, smoothstep(-0.1, 0.1, light));
+        col = mix(col, night, overlay_vis);
+        vec4 co2 = map_co2(uv * iResolution.xy);
+        vec4 overlay = mix(co2, vec4(0), smoothstep(0., 5., iTime - WARMING_START_TIME + lat/90.));
+        col += atmosphere;
+        col = mix(col, overlay.rgb, 0.5 * overlay.a * overlay_vis);
+    } else {
+        col += atmosphere;
+    }
+    
+    fragColor.rgb = mix(day, col, smoothstep(SLOWING_START_TIME, DAYNIGHT_START_TIME, iTime));
+    
+    return fragColor;
+}
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    if (iTime < LAND_START_TIME) {
+        fragColor = unwrap(fragCoord);
+    } else if (iTime < SLOWING_START_TIME - 10.) {
+        fragColor = map(fragCoord/iResolution.xy);
+    } else if (iTime < SLOWING_START_TIME) {
+        fragColor = rewrap(fragCoord);
+    } else if (iTime < STORY_END_TIME) {
+        fragColor = marble(fragCoord);
+        fragColor *= smoothstep(0., -10., iTime - STORY_END_TIME);
+    }
+#ifndef DISABLE_MINIGAME
+    else if (keypress(KeyS)) {
+        fragColor = marble(fragCoord);
+    } else {
+        fragColor = map(fragCoord/iResolution.xy);
+        fragColor *= smoothstep(0., 5., iTime - STORY_END_TIME);
+    }
+#endif
+    fragColor.rgb = pow(fragColor.rgb, vec3(1./1.5));
+    fragColor.a = 1.;
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

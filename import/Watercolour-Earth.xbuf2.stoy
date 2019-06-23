@@ -1,0 +1,114 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Watercolour Earth</name>
+ * 
+ * <description>
+ *   Water vapour evaporates from the ocean, is carried by wind currents, then rains
+ *   onto the land, painting it with vegetation. See also: [url]https://www.shadertoy.com/view/MdGBWG[/url]
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/MdKfWK</url>
+ * 
+ * <date>2018-07-05</date>
+ * 
+ * <tags></tags>
+ * 
+ * <pass-name>Buf C</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Buf C" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel2; //! buffer[xbuf: 0, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+uniform sampler2D iChannel1; //! buffer[xbuf: 1, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+uniform sampler2D iChannel0; //! buffer[xbuf: 2, mipmap: false, filter: GL_LINEAR]
+
+#include "Watercolour-Earth.frag"
+
+// 2018 David A Roberts <https://davidar.io>
+
+// atmospheric water vapour and soil moisture
+
+vec4 map(vec2 uv) {
+    vec2 p = uv * MAPRES + 0.5;
+    vec2 i = floor(p);
+    vec2 f = p - i;
+    f = f*f*f*(f*(f*6.0-15.0)+10.0); // http://iquilezles.org/www/articles/texture/texture.htm
+    p = i + f;
+    return texture(iChannel2, (p - 0.5)/iResolution.xy);
+}
+
+vec2 getVelocity(vec2 uv) {
+    vec2 p = uv * MAPRES;
+    if (p.x < 1.) p.x = 1.;
+    vec2 v = texture(iChannel1, p/iResolution.xy + PASS4).xy;
+    if (length(v) > 1.) v = normalize(v);
+    return v;
+}
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    fragColor = vec4(0);
+    if (iFrame < 10) return;
+    vec2 uv = fragCoord/iResolution.xy;
+    
+    vec2 v = getVelocity(uv);
+    vec2 vn = getVelocity(uv + N/iResolution.xy);
+    vec2 ve = getVelocity(uv + E/iResolution.xy);
+    vec2 vs = getVelocity(uv + S/iResolution.xy);
+    vec2 vw = getVelocity(uv + W/iResolution.xy);
+    float div = (ve - vw).x/2. + (vn - vs).y/2.;
+    
+    float land = map(uv).x;
+    float height = map(uv).y;
+    float hn = map(uv + N/iResolution.xy).y;
+    float he = map(uv + E/iResolution.xy).y;
+    float hs = map(uv + S/iResolution.xy).y;
+    float hw = map(uv + W/iResolution.xy).y;
+    vec2 hgrad = vec2(he - hw, hn - hs)/2.;
+    
+    vec4 climate = texture(iChannel1, uv * MAPRES / iResolution.xy + PASS3);
+    float mbar = climate.x;
+    float temp = climate.y;
+    
+    // water vapour advection
+    float w = texture(iChannel0, fract((fragCoord - v) / iResolution.xy)).w;
+    if (land < 0.5) { // evaporation
+        float noise = clamp(3. * FBM(vec3(5. * fragCoord/iResolution.xy, iTime)) - 1., 0., 1.);
+        w += noise * clamp(temp + 2., 0., 100.)/32. * (0.075 - 3. * div - 0.0045 * (mbar - 1012.));
+    }
+    w -= 0.01 * w; // precipitation
+    w -= 0.3 * length(hgrad); // orographic lift
+    fragColor.w = clamp(w, 0., 3.);
+    
+    // soil moisture
+    fragColor.z = texture(iChannel0, fragCoord/iResolution.xy).z;
+    fragColor.z = clamp(0.9985 * fragColor.z + 3. * clamp(w, 0., 0.01), 0., 5.);
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

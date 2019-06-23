@@ -1,0 +1,131 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Boids Predation</name>
+ * 
+ * <description>
+ *   Fork of [url]https://www.shadertoy.com/view/Mlc3Rl[/url] Uses mipmaps/textureLod
+ *   for long-range dependencies
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/MsKfzG</url>
+ * 
+ * <date>2018-06-20</date>
+ * 
+ * <tags></tags>
+ * 
+ * <pass-name>Buf A</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Buf A" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel0; //! buffer[xbuf: 1, mipmap: true]
+uniform sampler2D iChannel1; //! buffer[xbuf: 3, mipmap: true]
+
+#include "Boids-Predation.frag"
+
+// Prey
+
+#define MAX_SPEED 0.9
+#define MAX_FORCE 0.05
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    fragColor = vec4(0);
+    if(iFrame < 10) {
+        if(hash12(fragCoord) < 0.1) {
+            float q = 2.*PI * hash12(1. + fragCoord);
+            fragColor = vec4(fragCoord.xy, cos(q), sin(q));
+        }
+        return;
+    }
+    
+    vec4 data = texture(iChannel0, fragCoord/iResolution.xy);
+
+    if(data == vec4(0)) {
+        if (hash13(vec3(fragCoord, iFrame)) < 1e-4) {
+            data = vec4(fragCoord, 0, 0);
+        } else {
+            return;
+        }
+    }
+    
+    vec2 pos = data.xy;
+    vec2 vel = data.zw;
+
+    int nCount = 0;
+
+    vec2 alignment = vec2(0);
+    vec2 cohesion = vec2(0);
+    vec2 separation = vec2(0);
+
+    for(int i = -NEIGHBOR_DIST; i <= NEIGHBOR_DIST; i++) {
+        for(int j = -NEIGHBOR_DIST; j <= NEIGHBOR_DIST; j++) {
+            vec2 ij = vec2(i,j);
+            if(ij == vec2(0) || length(ij) > float(NEIGHBOR_DIST)) continue;
+
+            vec4 data2 = textureLod(iChannel0, fract((fragCoord + ij) / iResolution.xy), 0.);
+            if(data2.x > 0.001) {
+                vec2 pos2 = data2.xy;
+                vec2 vel2 = data2.zw;
+
+                if(distance(pos, pos2) < float(DESIRED_SEPARATION))
+                    separation += normalize(pos - pos2) / distance(pos, pos2);
+
+                if(distance(pos, pos2) < float(NEIGHBOR_DIST)) {
+                    alignment += vel2;
+                    cohesion += pos2;
+                    nCount++;
+                }
+            }
+
+            // nearby predators
+            data2 = textureLod(iChannel1, fract((fragCoord + ij) / iResolution.xy), 0.);
+            if(data2.x > 0.001) separation += normalize(pos - data2.xy);
+
+            // distant predators
+            vec2 coord = fragCoord + 16. * ij;
+            data2 = textureLod(iChannel1, fract(coord / iResolution.xy), 4.);
+            vec2 vel2 = data2.zw;
+            separation += normalize(pos - coord) * length(vel2);
+        }
+    }
+
+    if(cohesion != vec2(0)) cohesion = clamp_length(
+        MAX_SPEED * normalize(cohesion / float(nCount) - pos) - vel, MAX_FORCE);
+    if(alignment != vec2(0)) alignment = clamp_length(
+        MAX_SPEED * normalize(alignment) - vel, MAX_FORCE);
+    if(separation != vec2(0)) separation = clamp_length(
+        MAX_SPEED * normalize(separation) - vel, MAX_FORCE);
+
+    vel = clamp_length(vel + alignment + separation * 1.5 + cohesion, MAX_SPEED);
+    pos = mod(pos + vel, iResolution.xy);
+    fragColor = vec4(pos, vel);
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

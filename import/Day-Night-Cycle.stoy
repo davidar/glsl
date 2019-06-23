@@ -1,0 +1,152 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Day-Night Cycle</name>
+ * 
+ * <description>
+ *   [url]https://svs.gsfc.nasa.gov/30082[/url]
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/MldyDH</url>
+ * 
+ * <date>2018-07-25</date>
+ * 
+ * <tags></tags>
+ * 
+ * <other-passes>
+ *   <pass-type>buffer0</pass-type>
+ * </other-passes>
+ *
+ * <pass-name>Image</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Default" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel0; //! buffer[xbuf: 0, mipmap: true]
+
+#include "Day-Night-Cycle.frag"
+
+#define SCALE 0.9
+
+vec4 textureSeamless(sampler2D s, vec2 uv) {
+    // avoid mipmap artifacts due to uv discontinuities
+    vec2 dx = min(abs(dFdx(uv)), abs(dFdx(fract(uv + 0.5))));
+    vec2 dy = min(abs(dFdy(uv)), abs(dFdy(fract(uv + 0.5))));
+    return textureGrad(s, uv, dx, dy);
+}
+
+float speckle(vec2 p, float density) {
+    float m = 0.;
+    for (float y = -1.; y <= 1.; y++) {
+        for (float x = -1.; x <= 1.; x++) {
+            vec2 q = floor(p) + vec2(x,y) + hash22(floor(p) + vec2(x,y));
+            //m += 1.5 * rexp(q) * exp(-2. * distance(p,q) / clamp(density, 0., 1.));
+            float a = 1.5 * rexp(q) * pow(1.5 * clamp(density, 0., 0.67), 1.5);
+            m += a * exp(-2.0 * distance(p,q) / clamp(density, 0.67, 1.));
+        }
+    }
+    return m;
+}
+
+vec3 map(vec3 p) {
+    float lat = 90. - acos(p.y / length(p)) * 180./PI;
+    float lon = atan(p.x, p.z) * 180./PI;
+    vec2 uv = vec2(lon/360., lat/180.) + 0.5;
+    vec3 c;
+    c.xy = textureSeamless(iChannel0, uv).xy;
+    c.x = max(c.x, 0.);
+    c.z = speckle(1000. * uv, c.y);
+    c.z *= 0.5 * FBM(vec3(50. * uv, iTime));
+    return c;
+}
+
+vec3 normal(vec3 p) {
+	vec2 e = vec2(1,0)/1e3;
+    p += 0.04 * vec3(
+        map(p + e.xyy).x - map(p - e.xyy).x,
+        map(p + e.yxy).x - map(p - e.yxy).x,
+        map(p + e.yyx).x - map(p - e.yyx).x)/ (2. * length(e));
+	return normalize(p);
+}
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    vec2 p = (2. * fragCoord.xy - iResolution.xy) / iResolution.y;
+    float lat = 15. * sin(0.1 * iTime);
+    float lon = -5. * iTime;
+    if (iMouse.z > 0.) {
+        lat = 90.  - 180. * iMouse.y/iResolution.y;
+        lon = 180. - 360. * iMouse.x/iResolution.x;
+    }
+    vec3 camPos = 10. * fromlatlon(lat, lon);
+    vec3 w = normalize(-camPos);
+    vec3 u = normalize(cross(w, vec3(0,1,0)));
+    vec3 v = normalize(cross(u, w));
+    mat3 camera = mat3(u, v, w);
+    
+    vec3 sun = fromlatlon(23.5 * sin(2.*PI * iTime/60.), -360. * iTime/15.);
+    vec3 dir = normalize(camera * vec3(p / SCALE, length(camPos)));
+			  
+	vec2 e = ray_vs_sphere(camPos, dir, R_INNER + ATMOSPHERE_THICKNESS);
+	if (e.x > e.y) return;
+	
+	vec2 f = ray_vs_sphere(camPos, dir, R_INNER);
+	e.y = min(e.y, f.x);
+    float dist = f.x;
+    
+    fragColor = vec4(0,0,0,1);
+    if (f.x < f.y) {
+        vec3 q = camPos + dir * dist;
+        vec3 c = map(q);
+        float height = c.x;
+        float density = c.y;
+        float cities = c.z;
+        float light = dot(normal(q), sun);
+        float specular = pow(clamp(dot(normalize(sun - dir), q), 0., 1.), 64.);
+        vec3 day = vec3(0.06, 0.05, 0.2);
+        vec3 night = vec3(0.00, 0.00, 0.01);
+        if (height > 0.) {
+            day = mix(vec3(0.16, 0.23, 0.09), vec3(0.56, 0.49, 0.28), smoothstep(0., 0.5, height));
+            night = vec3(0.00, 0.00, 0.02);
+            night *= 1. + 1.5 * clamp(FBM(50. * q) - 0.15, 0., 1.);
+            night = mix(night, 0.75 * sqrt(density) * vec3(0.95, 0.76, 0.47),
+                        smoothstep(0., 1., cities) * dot(normalize(camPos), q));
+            night = clamp(night, 0., 1.);
+        } else {
+            day += 0.25 * specular * vec3(0.87, 0.75, 0.);
+        }
+        fragColor.rgb = mix(night, day * light, smoothstep(-0.1, 0.1, light));
+    }
+
+	fragColor.rgb += in_scatter(camPos, dir, e, sun);
+    
+    fragColor.rgb = pow(fragColor.rgb, vec3(1./2.2));
+}
+	
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

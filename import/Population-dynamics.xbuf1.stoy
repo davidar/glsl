@@ -1,0 +1,78 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Population dynamics</name>
+ * 
+ * <description>
+ *   Predators (blue) eat prey (red). Prey eat vegetation (green). Click to show
+ *   history of population cycles in each patch.
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/MsVfzV</url>
+ * 
+ * <date>2018-07-02</date>
+ * 
+ * <tags></tags>
+ * 
+ * <pass-name>Buf B</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Buf B" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel0; //! buffer[xbuf: 0, mipmap: true]
+uniform sampler2D iChannel1; //! buffer[xbuf: 1, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+
+#include "Population-dynamics.frag"
+
+#define LOD 6.
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    if (iFrame < 10) {
+        fragColor = vec4(0);
+        return;
+    }
+    vec2 p = fragCoord;
+    if (iFrame % 10 == 0) p += vec2(1,0);
+    fragColor = texture(iChannel1, p/iResolution.xy);
+    float cell = pow(2., LOD);
+    vec4 c = textureLod(iChannel0, (0.5 + floor(fragCoord/cell))*cell/iResolution.xy, LOD);
+    float x = mod(fragCoord.x, cell);
+    float y = mod(fragCoord.y, cell);
+    if (x < 5.) fragColor = vec4(0);
+    if (x >= cell - 1.) {
+        if (iFrame % 10 == 0) fragColor = vec4(0);
+        if (abs(y - 5. * c.b * cell) < 0.5) {
+            fragColor.b = 1.;
+        } else if (abs(y - 2. * c.r * cell) < 0.5) {
+            fragColor.r = 1.;
+        }
+    }
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

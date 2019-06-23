@@ -1,0 +1,93 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Global Wind Circulation</name>
+ * 
+ * <description>
+ *   Generates pressure systems (click to show) and wind flow patterns from a land/ocean
+ *   map. Based on [url=https://web.archive.org/web/20130619132254/http://jc.tech-galaxy.com/bricka/climate_cookbook.html]The
+ *   Climate Cookbook[/url] and some simple modelling.
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/MdGBWG</url>
+ * 
+ * <date>2018-06-30</date>
+ * 
+ * <tags></tags>
+ * 
+ * <pass-name>Buf C</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Buf C" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel1; //! buffer[xbuf: 1, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+uniform sampler2D iChannel0; //! buffer[xbuf: 2, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+
+#include "Global-Wind-Circulation.frag"
+
+// 2018 David A Roberts <https://davidar.io>
+
+// wind flow map
+
+vec2 getVelocity(vec2 uv) {
+    vec2 p = uv * MAPRES;
+    if (p.x < 1.) p.x = 1.;
+    vec2 v = texture(iChannel1, p/iResolution.xy + vec2(0.5,0.5)).xy;
+    if (length(v) > 1.) v = normalize(v);
+    return v;
+}
+
+vec2 getPosition(vec2 fragCoord) {
+    for(int i = -1; i <= 1; i++) {
+        for(int j = -1; j <= 1; j++) {
+            vec2 uv = (fragCoord + vec2(i,j)) / iResolution.xy;
+            vec2 p = texture(iChannel0, fract(uv)).xy;
+            if(p == vec2(0)) {
+                if (hash13(vec3(fragCoord + vec2(i,j), iFrame)) > 1e-4) continue;
+                p = fragCoord + vec2(i,j) + hash21(float(iFrame)) - 0.5; // add particle
+            } else if (hash13(vec3(fragCoord + vec2(i,j), iFrame)) < 8e-3) {
+                continue; // remove particle
+            }
+            vec2 v = getVelocity(uv);
+            p = p + v;
+            p.x = mod(p.x, iResolution.x);
+            if(abs(p.x - fragCoord.x) < 0.5 && abs(p.y - fragCoord.y) < 0.5)
+                return p;
+        }
+    }
+    return vec2(0);
+}
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    fragColor.xy = getPosition(fragCoord);
+    fragColor.z = 0.9 * texture(iChannel0, fragCoord/iResolution.xy).z;
+    if (fragColor.x > 0.) fragColor.z = 1.;
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

@@ -1,0 +1,84 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Lotka-Volterra diffusion</name>
+ * 
+ * <description>
+ *   Influence of environmental variation on a large-scale ecological model. Vegetation
+ *   (green) growth rate varies with time, prey (blue) birthrate increases along
+ *   y-axis, and predator (red) effectiveness along x-axis.
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/Xtcyzr</url>
+ * 
+ * <date>2018-07-11</date>
+ * 
+ * <tags></tags>
+ * 
+ * <pass-name>Buf A</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Buf A" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel0; //! buffer[xbuf: 0, wrap: GL_CLAMP_TO_EDGE, mipmap: false, filter: GL_LINEAR]
+
+#include "Lotka-Volterra-diffusion.frag"
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    if (iFrame < 10) {
+        fragColor.xyz = hash32(fragCoord) * vec3(0.5, 1., 2.);
+        return;
+    }
+
+    vec4 c = buf(fragCoord);
+    vec4 n = buf(fragCoord + N);
+    vec4 e = buf(fragCoord + E);
+    vec4 s = buf(fragCoord + S);
+    vec4 w = buf(fragCoord + W);
+
+    float plant_growth = 0.75 - 0.25 * cos(2.*PI * iTime / 60.);
+    if (iTime < 30.) plant_growth = 1.;
+    float reproduction = 2. * fragCoord.y / iResolution.y;
+    float predation = 0.9 + 1.1 * fragCoord.x / iResolution.x;
+
+    // generalised Lotka-Volterra equations
+    float dx = plant_growth - c.y;
+    float dy = reproduction * c.x - predation * c.z - 1.;
+    float dz = predation * c.y - 1.;
+    float dt = 0.1;
+    c.xyz += dt * c.xyz * vec3(dx, dy, dz);
+    c = clamp(c, 0.01, 10.);
+
+    // diffusion
+    c.xyz += dt * (n + e + s + w - 4. * c).xyz * vec3(0.25, 0.5, 1.);
+
+    fragColor = c;
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}

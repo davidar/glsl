@@ -1,0 +1,65 @@
+/*!
+ * <info>
+ * <author>davidar [ https://www.shadertoy.com/user/davidar ]</author>
+ * <name>Boids Predation</name>
+ * 
+ * <description>
+ *   Fork of [url]https://www.shadertoy.com/view/Mlc3Rl[/url] Uses mipmaps/textureLod
+ *   for long-range dependencies
+ * </description>
+ * 
+ * <url>https://www.shadertoy.com/view/MsKfzG</url>
+ * 
+ * <date>2018-06-20</date>
+ * 
+ * <tags></tags>
+ * 
+ * <pass-name>Buf D</pass-name>
+ * 
+ * <synthclipse-importer-legal-note>
+ *   As noted in: [ https://www.shadertoy.com/terms ]:
+ *   If the author did not stated otherwise, this shader is licensed under
+ *   Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License 
+ *   [ http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US ].
+ * </synthclipse-importer-legal-note>
+ * </info>
+ */
+
+//! <group name="Buf D" />
+
+uniform vec3 iResolution;           // viewport resolution (in pixels)
+uniform float iTime;                // shader playback time (in seconds)
+uniform float iGlobalTime;          // shader playback time (in seconds) - <deprecated>
+uniform float iTimeDelta;           // render time (in seconds)
+uniform int iFrame;                 // shader playback frame
+uniform float iChannelTime[4];      // channel playback time (in seconds)
+uniform vec3 iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4 iDate;                 // (year, month, day, time in seconds)
+uniform float iSampleRate;          // sound sample rate (i.e., 44100)
+uniform float iFrameRate;           // frames per second (effectively "1.0 / iTimeDelta")
+
+uniform sampler2D iChannel0; //! buffer[xbuf: 2, filter: GL_NEAREST]
+
+#include "Boids-Predation.frag"
+
+void mainImage( inout vec4 fragColor, in vec2 fragCoord ) {
+    fragColor = vec4(0);
+    for(int i = -2; i <= 2; i++) {
+        for(int j = -2; j <= 2; j++) {
+            vec4 data = texture(iChannel0, fract((fragCoord + vec2(i,j)) / iResolution.xy));
+            if(abs(data.x - fragCoord.x) < 0.5 && abs(data.y - fragCoord.y) < 0.5) {
+                fragColor = data;
+                return;
+            }
+        }
+    }
+}
+
+
+void main() {
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	mainImage(color, gl_FragCoord.xy);
+
+	gl_FragColor = color;
+}
